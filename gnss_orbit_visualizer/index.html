@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="zh-CN"> 
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>卫星轨道多源数据综合可视化系统</title>
+    
+    <!-- CesiumJS -->
+    <script src="https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Cesium.js"></script>
+    <link href="https://cesium.com/downloads/cesiumjs/releases/1.104/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
+    
+    <!-- 样式 -->
+    <link rel="stylesheet" href="/gnss_orbit_visualizer/css/style.css">
+</head>
+<body>
+    <!-- 顶部标题栏 -->
+    <header class="header">
+        <div class="header-title">
+            <span class="title-icon">🛰️</span>
+            <h1>卫星轨道多源数据综合可视化系统</h1>
+            <span class="subtitle">Multi-source Satellite Orbit Visualization</span>
+        </div>
+        <div class="header-controls">
+            <select id="dataSourceSelect" class="control-select">
+                <option value="tle">TLE 轨道数据</option>
+                <option value="rinex">RINEX 星历数据</option>
+            </select>
+            <button id="refreshBtn" class="control-btn">🔄 刷新数据</button>
+        </div>
+    </header>
+
+    <!-- 主内容区 -->
+    <main class="main-content">
+        <!-- 左侧控制面板 -->
+        <aside class="left-panel">
+            <div class="panel-section">
+                <h3>📡 卫星系统</h3>
+                <div class="satellite-systems">
+                    <label class="checkbox-item">
+                        <input type="checkbox" id="gps-check" checked>
+                        <span class="system-color" style="background:#2563eb"></span>
+                        GPS (美国)
+                    </label>
+                    <label class="checkbox-item">
+                        <input type="checkbox" id="glonass-check" checked>
+                        <span class="system-color" style="background:#dc2626"></span>
+                        GLONASS (俄罗斯)
+                    </label>
+                    <label class="checkbox-item">
+                        <input type="checkbox" id="galileo-check" checked>
+                        <span class="system-color" style="background:#d97706"></span>
+                        Galileo (欧盟)
+                    </label>
+                    <label class="checkbox-item">
+                        <input type="checkbox" id="beidou-check" checked>
+                        <span class="system-color" style="background:#16a34a"></span>
+                        北斗 (中国)
+                    </label>
+                </div>
+            </div>
+
+            <div class="panel-section">
+                <h3>⏱️ 时间控制</h3>
+                <div class="time-controls">
+                    <div class="time-display">
+                        <span class="time-label">当前时间:</span>
+                        <span id="currentTime" class="time-value">--:--:--</span>
+                    </div>
+                    <div class="time-slider-container">
+                        <input type="range" id="timeSlider" min="0" max="100" value="50" class="time-slider">
+                        <div class="time-range">
+                            <span>24h前</span>
+                            <span>现在</span>
+                            <span>24h后</span>
+                        </div>
+                    </div>
+                    <div class="playback-controls">
+                        <button id="playBtn" class="play-btn">▶️ 播放</button>
+                        <button id="pauseBtn" class="play-btn">⏸️ 暂停</button>
+                        <select id="speedSelect" class="speed-select">
+                            <option value="1">1x</option>
+                            <option value="10">10x</option>
+                            <option value="60">60x</option>
+                            <option value="300">300x</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel-section">
+                <h3>📊 显示选项</h3>
+                <div class="display-options">
+                    <label class="checkbox-item">
+                        <input type="checkbox" id="showOrbits" checked>
+                        显示轨道
+                    </label>
+                    <label class="checkbox-item">
+                        <input type="checkbox" id="showLabels" checked>
+                        显示标签
+                    </label>
+                    <label class="checkbox-item">
+                        <input type="checkbox" id="showGroundTrack" checked>
+                        星下点轨迹
+                    </label>
+                    <label class="checkbox-item">
+                        <input type="checkbox" id="showCoverage">
+                        信号覆盖范围
+                    </label>
+                </div>
+            </div>
+
+            <div class="panel-section">
+                <h3>📡 数据源选择</h3>
+                <div class="data-source-tabs">
+                    <div class="tab-buttons">
+                        <button id="tab-tle" class="tab-btn active" data-tab="tle">TLE NAV</button>
+                        <button id="tab-rinex" class="tab-btn" data-tab="rinex">RINEX</button>
+                        <button id="tab-sp3" class="tab-btn" data-tab="sp3">SP3</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TLE NAV -->
+            <div id="panel-tle" class="panel-section data-panel active">
+                <h3>📂 TLE 轨道数据</h3>
+                <div class="data-management">
+                    <button id="uploadTleBtn" class="action-btn">📤 上传TLE文件</button>
+                    <input type="file" id="tleInput" accept=".tle,.txt,.xml" style="display:none">
+                </div>
+                <p style="font-size:11px;color:#94a3b8;margin-top:6px">支持Celestrak TLE格式，上传后自动解析并显示轨道</p>
+                <div id="tle-status" style="margin-top:8px;font-size:12px;color:#86efac"></div>
+            </div>
+
+            <!-- RINEX -->
+            <div id="panel-rinex" class="panel-section data-panel" style="display:none">
+                <h3>📂 RINEX 广播星历</h3>
+                <div class="data-management">
+                    <button id="uploadRinexBtn" class="action-btn">📤 上传RINEX文件</button>
+                    <input type="file" id="rinexInput" accept=".rnx,.obs,.nav,.n,.g,.l" style="display:none">
+                </div>
+                <p style="font-size:11px;color:#94a3b8;margin-top:6px">支持 RINEX 2.11/3.04 导航星历文件（N文件）</p>
+                <div id="rinex-status" style="margin-top:8px;font-size:12px;color:#86efac"></div>
+            </div>
+
+            <!-- SP3 -->
+            <div id="panel-sp3" class="panel-section data-panel" style="display:none">
+                <h3>📂 SP3 精密星历</h3>
+                <div class="data-management">
+                    <button id="uploadSp3Btn" class="action-btn">📤 上传SP3文件</button>
+                    <input type="file" id="sp3Input" accept=".sp3,.eph" style="display:none">
+                </div>
+                <p style="font-size:11px;color:#94a3b8;margin-top:6px">支持 CG/GC/FP3 格式精密星历文件</p>
+                <div id="sp3-status" style="margin-top:8px;font-size:12px;color:#86efac"></div>
+            </div>
+
+            <div class="panel-section">
+                <h3>🔬 状态向量仿真</h3>
+                <div class="sv-input-form">
+                    <div class="sv-row">
+                        <label>X (m):</label><input type="number" id="sv-x" placeholder="7100km" value="7100000">
+                    </div>
+                    <div class="sv-row">
+                        <label>Y (m):</label><input type="number" id="sv-y" placeholder="0" value="0">
+                    </div>
+                    <div class="sv-row">
+                        <label>Z (m):</label><input type="number" id="sv-z" placeholder="0" value="0">
+                    </div>
+                    <div class="sv-row">
+                        <label>Vx (m/s):</label><input type="number" id="sv-vx" placeholder="0" value="0">
+                    </div>
+                    <div class="sv-row">
+                        <label>Vy (m/s):</label><input type="number" id="sv-vy" placeholder="5km/s" value="5000">
+                    </div>
+                    <div class="sv-row">
+                        <label>Vz (m/s):</label><input type="number" id="sv-vz" placeholder="0" value="0">
+                    </div>
+                    <div class="sv-row">
+                        <label>名称:</label><input type="text" id="sv-name" placeholder="仿真卫星" value="SIM-01">
+                    </div>
+                    <div class="sv-row">
+                        <label>颜色:</label>
+                        <select id="sv-color">
+                            <option value="#ff00ff">紫色</option>
+                            <option value="#00ffff">青色</option>
+                            <option value="#ffaa00">橙色</option>
+                            <option value="#ff5500">红色</option>
+                        </select>
+                    </div>
+                    <button id="addSvBtn" class="action-btn" style="margin-top:6px">➕ 添加仿真卫星</button>
+                </div>
+            </div>
+
+
+        </aside>
+
+        <!-- 地图容器 -->
+        <div class="map-container">
+            <div id="cesiumContainer"></div>
+        </div>
+
+        <!-- 右侧信息面板 -->
+        <aside class="right-panel">
+            <div class="panel-section">
+                <h3>🛰️ 卫星列表</h3>
+                <div class="satellite-list-header">
+                    <input type="text" id="satSearch" placeholder="搜索卫星..." class="search-input">
+                </div>
+                <div id="satelliteList" class="satellite-list">
+                    <!-- 动态生成 -->
+                </div>
+            </div>
+
+            <div class="panel-section">
+                <h3>📈 统计数据</h3>
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <span class="stat-value" id="totalSatCount">0</span>
+                        <span class="stat-label">卫星总数</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value" id="visibleCount">0</span>
+                        <span class="stat-label">可视卫星</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value" id="gpsCount">0</span>
+                        <span class="stat-label">GPS</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value" id="glonassCount">0</span>
+                        <span class="stat-label">GLONASS</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value" id="galileoCount">0</span>
+                        <span class="stat-label">Galileo</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-value" id="beidouCount">0</span>
+                        <span class="stat-label">北斗</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel-section">
+                <h3>🔍 选中卫星详情</h3>
+                <div id="satelliteDetail" class="satellite-detail">
+                    <p class="no-selection">点击左侧卫星查看详情</p>
+                </div>
+            </div>
+        </aside>
+    </main>
+
+    <!-- 状态栏 -->
+    <footer class="status-bar">
+        <div class="status-item">
+            <span class="status-label">数据源:</span>
+            <span id="dataSourceStatus" class="status-value">TLE</span>
+        </div>
+        <div class="status-item">
+            <span class="status-label">更新:</span>
+            <span id="updateTime" class="status-value">--</span>
+        </div>
+        <div class="status-item">
+            <span class="status-label">UTC时间:</span>
+            <span id="utcTime" class="status-value">--</span>
+        </div>
+        <div class="status-item">
+            <span class="status-label">帧率:</span>
+            <span id="fpsValue" class="status-value">--</span>
+        </div>
+    </footer>
+
+    <!-- CesiumJS 令牌提示 -->
+    <div id="cesiumTokenModal" class="modal" style="display:none;">
+        <div class="modal-content">
+            <h2>需要设置CesiumIon令牌</h2>
+            <p>请到 <a href="https://cesium.com/ion/" target="_blank">cesium.com/ion</a> 注册获取免费令牌</p>
+            <input type="text" id="cesiumTokenInput" placeholder="输入您的令牌..." class="token-input">
+            <button id="setTokenBtn" class="action-btn">确定</button>
+        </div>
+    </div>
+
+    <!-- 加载指示器 -->
+    <div id="loadingOverlay" class="loading-overlay" style="display:none;">
+        <div class="loading-spinner"></div>
+        <p id="loadingText">加载中...</p>
+    </div>
+
+    <!-- JavaScript -->
+    <script src="/gnss_orbit_visualizer/js/config.js?v=10"></script>
+    <script src="/gnss_orbit_visualizer/js/satellite_data.js?v=12"></script>
+    <script src="/gnss_orbit_visualizer/js/orbit_calculator.js?v=16"></script>
+    <script src="/gnss_orbit_visualizer/js/cesium_manager.js?v=10"></script>
+    <script src="/gnss_orbit_visualizer/js/ui_controller.js?v=11"></script>
+    <script src="/gnss_orbit_visualizer/js/main.js?v=10"></script>
+</body>
+</html>
